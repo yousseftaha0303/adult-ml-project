@@ -1,60 +1,69 @@
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 
-data = pd.read_csv('adult.csv', na_values='?') # reading the data and changing the '?' symobol to nan
-data.head()
-data.info()
-data.describe()
-data.isnull().sum()
+# Load dataset
+data = pd.read_csv(r'data\adult.csv', na_values='?')
+data = data.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
-#   Filling missing data
-
-#   Option 1 (filling with mode) as it is a categorical data
-
+# --------------------------
+# 1. Fill missing data
+# --------------------------
 for col in data.columns:
     if data[col].dtype == 'object':
         data[col].fillna(data[col].mode()[0], inplace=True)
 
-#   Option 2 (Drop all the rows that has null values) incorrect as there are 2000 rows at least will be dropped
-
-#data = data.dropna()      # not recommended 
-
-#####     Some values contain leading spaces
-
-data = data.applymap(lambda x: x.strip() if isinstance(x, str) else x)
-
-######## For Clustering we can make the NaN values be at class Unknown
-
+# --------------------------
+# 2. Preprocessing for Clustering
+# --------------------------
 data_clustering = data.copy()
 for col in ["workclass", "occupation", "native-country"]:
     data_clustering[col].fillna("Unknown", inplace=True)
 
-####      Encoding Categorical Variables for regeression and classification
-
-data_classification = pd.get_dummies(data, drop_first=True)
-
-########     Split X and Y         (Feature and Output)
-
-X = data_classification.drop("income_>50K", axis=1)
-y = data_classification["income_>50K"]
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=10)
-
-##           Standardization     (Z-score)
-numeric_cols = ["age","fnlwgt","education-num","capital-gain","capital-loss","hours-per-week"]
-scaler = StandardScaler()
-X_train[numeric_cols] = scaler.fit_transform(X_train[numeric_cols])
-X_test[numeric_cols] = scaler.transform(X_test[numeric_cols])
-
-####      Encoding Categorical Variables for Clustring
-
+# Encode categorical variables
 categorical_cols = data_clustering.select_dtypes(include=["object"]).columns
 le = LabelEncoder()
-
 for col in categorical_cols:
     data_clustering[col] = le.fit_transform(data_clustering[col])
 
-##           Standardization     (Z-score)
-data_clustering[numeric_cols] = scaler.fit_transform(data_clustering[numeric_cols])
+# Standardize numeric columns
+numeric_cols = ["age","fnlwgt","education-num","capital-gain","capital-loss","hours-per-week"]
+scaler_cluster = StandardScaler()
+data_clustering[numeric_cols] = scaler_cluster.fit_transform(data_clustering[numeric_cols])
+
+# Optionally drop target for unsupervised clustering
+if 'income' in data_clustering.columns:
+    data_clustering_no_target = data_clustering.drop(columns=['income'])
+else:
+    data_clustering_no_target = data_clustering.copy()
+
+# --------------------------
+# 3. Preprocessing for Classification
+# --------------------------
+data_classification = pd.get_dummies(data, drop_first=True)
+
+X_class = data_classification.drop("income_>50K", axis=1)
+y_class = data_classification["income_>50K"]
+
+X_train_class, X_test_class, y_train_class, y_test_class = train_test_split(
+    X_class, y_class, test_size=0.2, random_state=10
+)
+
+scaler_class = StandardScaler()
+X_train_class[numeric_cols] = scaler_class.fit_transform(X_train_class[numeric_cols])
+X_test_class[numeric_cols] = scaler_class.transform(X_test_class[numeric_cols])
+
+# --------------------------
+# 4. Preprocessing for Regression
+# --------------------------
+# predict 'hours-per-week' (numeric target)
+data_regression = pd.get_dummies(data.drop(columns=['hours-per-week']), drop_first=True)
+y_reg = data['hours-per-week']
+
+X_train_reg, X_test_reg, y_train_reg, y_test_reg = train_test_split(
+    data_regression, y_reg, test_size=0.2, random_state=10
+)
+
+scaler_reg = StandardScaler()
+X_train_reg[numeric_cols[:-1]] = scaler_reg.fit_transform(X_train_reg[numeric_cols[:-1]])
+X_test_reg[numeric_cols[:-1]] = scaler_reg.transform(X_test_reg[numeric_cols[:-1]])
